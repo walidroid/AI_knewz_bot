@@ -31,7 +31,7 @@ def is_ai_relevant(text: str) -> bool:
     lower = text.lower()
     return any(re.search(rf"\b{re.escape(kw)}\b", lower) for kw in AI_KEYWORDS)
 
-def collect_news(max_items=6):
+def collect_news(max_items=10):
     seen_titles = set()
     collected = []
     fallback_articles = []
