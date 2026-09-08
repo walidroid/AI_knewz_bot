@@ -4,8 +4,7 @@ import re
 import requests
 import feedparser
 
-# Load credentials securely from environment variables (GitHub Secrets or local env)
-# Fallback to defaults only for local testing if needed
+# Load credentials from environment variables
 TELEGRAM_BOT_TOKEN = os.getenv("TELEGRAM_BOT_TOKEN")
 TELEGRAM_CHAT_ID = os.getenv("TELEGRAM_CHAT_ID")
 
@@ -19,52 +18,66 @@ RSS_FEEDS = [
 AI_KEYWORDS = [
     "ai", "llm", "gpt", "model", "deep learning", "machine learning",
     "neural", "agent", "robot", "nvidia", "hugging face", "open-source",
-    "intelligence artificielle", "openai", "anthropic", "meta ai"
+    "intelligence artificielle", "openai", "anthropic", "meta", "google",
+    "gemini", "claude", "mistral", "chip", "tech"
 ]
 
 def clean_html(raw_html: str) -> str:
-    """Strip HTML tags and unescape characters."""
     clean_text = re.sub(r"<[^>]+>", "", raw_html or "")
     return html.unescape(clean_text).strip()
 
 def is_ai_relevant(text: str) -> bool:
-    """Check if any keyword matches."""
     lower = text.lower()
-    return any(re.search(rf"\b{kw}\b", lower) for kw in AI_KEYWORDS)
+    return any(re.search(rf"\b{re.escape(kw)}\b", lower) for kw in AI_KEYWORDS)
 
 def collect_news(max_items=6):
     seen_titles = set()
     collected = []
+    fallback_articles = []
 
     for feed_url in RSS_FEEDS:
         try:
-            parsed = feedparser.parse(feed_url)
+            print(f"Fetching feed: {feed_url}")
+            # Use custom User-Agent to avoid RSS blocks
+            parsed = feedparser.parse(feed_url, agent="Mozilla/5.0 (NewsBot/1.0)")
             for entry in parsed.entries:
                 title = clean_html(entry.get("title", ""))
                 link = entry.get("link", "")
                 summary = clean_html(entry.get("summary", ""))
 
                 if title and title not in seen_titles:
+                    seen_titles.add(title)
+                    item = {"title": title, "link": link}
+                    
                     if is_ai_relevant(title) or is_ai_relevant(summary):
-                        seen_titles.add(title)
-                        collected.append({"title": title, "link": link})
-                        if len(collected) >= max_items:
-                            return collected
+                        collected.append(item)
+                    else:
+                        fallback_articles.append(item)
+
+                    if len(collected) >= max_items:
+                        return collected
         except Exception as e:
             print(f"Error fetching feed {feed_url}: {e}")
-            
+
+    # Fallback to general tech articles if keyword matching returned fewer items
+    if len(collected) < max_items:
+        needed = max_items - len(collected)
+        collected.extend(fallback_articles[:needed])
+
     return collected
 
 def send_telegram_digest(articles):
-    if not articles:
-        print("No relevant articles found.")
-        return
+    print(f"DEBUG: Found {len(articles)} articles.")
+    print(f"DEBUG: TELEGRAM_BOT_TOKEN present? {bool(TELEGRAM_BOT_TOKEN)}")
+    print(f"DEBUG: TELEGRAM_CHAT_ID: {TELEGRAM_CHAT_ID}")
 
     if not TELEGRAM_BOT_TOKEN or not TELEGRAM_CHAT_ID:
-        print("Error: TELEGRAM_BOT_TOKEN or TELEGRAM_CHAT_ID is missing!")
+        raise ValueError("TELEGRAM_BOT_TOKEN or TELEGRAM_CHAT_ID is missing from environment variables!")
+
+    if not articles:
+        print("No articles collected.")
         return
 
-    # Using HTML parse_mode avoids MarkdownV2 character escaping crashes
     lines = ["<b>📰 Revue de Presse IA (Dernières news)</b>\n"]
     for i, item in enumerate(articles, start=1):
         safe_title = html.escape(item['title'])
@@ -81,14 +94,14 @@ def send_telegram_digest(articles):
         "disable_web_page_preview": True
     }
 
-    try:
-        res = requests.post(url, json=payload, timeout=15)
-        if res.status_code == 200:
-            print("Message delivered successfully to Telegram!")
-        else:
-            print(f"Telegram API Error ({res.status_code}): {res.text}")
-    except requests.exceptions.RequestException as e:
-        print(f"Network request failed: {e}")
+    response = requests.post(url, json=payload, timeout=15)
+    print(f"Telegram API Status: {response.status_code}")
+    print(f"Telegram API Response: {response.text}")
+
+    if response.status_code != 200:
+        raise RuntimeError(f"Telegram error {response.status_code}: {response.text}")
+    else:
+        print("Message sent successfully!")
 
 if __name__ == "__main__":
     items = collect_news()
