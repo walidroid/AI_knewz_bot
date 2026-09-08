@@ -68,22 +68,31 @@ def collect_news(max_items=10):
     return collected
 
 def send_telegram_digest(articles):
-    print(f"DEBUG: Found {len(articles)} articles.")
-    print(f"DEBUG: TELEGRAM_BOT_TOKEN present? {bool(TELEGRAM_BOT_TOKEN)}")
-    print(f"DEBUG: TELEGRAM_CHAT_ID: {TELEGRAM_CHAT_ID}")
-
-    if not TELEGRAM_BOT_TOKEN or not TELEGRAM_CHAT_ID:
-        raise ValueError("TELEGRAM_BOT_TOKEN or TELEGRAM_CHAT_ID is missing from environment variables!")
-
     if not articles:
         print("No articles collected.")
         return
 
-    lines = ["<b>📰 Lastest AI News </b>\n"]
+    # Header with bold and monospace date/badge
+    lines = [
+        "⚡ <b>FLASH TECH &amp; IA</b> ⚡",
+        "<i>Synthèse automatique des dernières actualités</i>\n"
+    ]
+
     for i, item in enumerate(articles, start=1):
         safe_title = html.escape(item['title'])
         safe_link = item['link']
-        lines.append(f"{i}. <a href=\"{safe_link}\">{safe_title}</a>")
+        
+        # Extract the source domain name (e.g., 'techcrunch.com')
+        domain = safe_link.split('/')[2].replace('www.', '').replace('feeds.', '')
+
+        # Layout each news item inside an indented quote card with monospace tags
+        card = (
+            f"<blockquote>"
+            f"🔹 <b><a href=\"{safe_link}\">{safe_title}</a></b>\n"
+            f"🏷️ <code>{domain}</code>"
+            f"</blockquote>"
+        )
+        lines.append(card)
 
     message_text = "\n".join(lines)
 
@@ -95,7 +104,7 @@ def send_telegram_digest(articles):
         "disable_web_page_preview": True
     }
 
-    response = requests.post(url, json=payload, timeout=15)
+    requests.post(url, json=payload, timeout=15)
     print(f"Telegram API Status: {response.status_code}")
     print(f"Telegram API Response: {response.text}")
 
