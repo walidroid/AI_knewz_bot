@@ -79,7 +79,7 @@ def send_telegram_digest(articles):
         print("No articles collected.")
         return
 
-    lines = ["<b>📰 Revue de Presse IA (Dernières news)</b>\n"]
+    lines = ["<b>📰 Lastest AI News </b>\n"]
     for i, item in enumerate(articles, start=1):
         safe_title = html.escape(item['title'])
         safe_link = item['link']
